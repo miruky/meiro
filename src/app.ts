@@ -1,5 +1,5 @@
 import './style.css';
-import { type CarveStep, Maze } from './lib/grid';
+import { type CarveStep, Maze, wallPathD } from './lib/grid';
 import { GENERATORS, getGenerator } from './lib/generators';
 import { makePRNG } from './lib/rng';
 import { analyze, solve, type SolveResult } from './lib/solve';
@@ -13,6 +13,7 @@ import {
   MIN_SIZE,
 } from './lib/share';
 import { loadString, saveString } from './lib/storage';
+import { DARK_THEME, exportFilename, LIGHT_THEME, mazeToSvg } from './lib/export';
 import { icon } from './icons';
 
 const UNIT = 10;
@@ -97,6 +98,7 @@ export function mountApp(root: HTMLElement): void {
       role: 'img',
       'aria-label': `${w}かける${hh}の迷路`,
       preserveAspectRatio: 'xMidYMid meet',
+      style: `aspect-ratio:${w} / ${hh}`,
     });
     const bg = svg('rect', {
       x: 0,
@@ -129,21 +131,8 @@ export function mountApp(root: HTMLElement): void {
     boardHost.replaceChildren(board);
   }
 
-  function wallsD(): string {
-    const w = state.config.width;
-    const hh = state.config.height;
-    let d = `M0 0H${w * UNIT}V${hh * UNIT}H0Z`;
-    for (let y = 0; y < hh; y++) {
-      for (let x = 0; x < w; x++) {
-        if (y > 0 && state.maze.hasWall(x, y, 1)) d += `M${x * UNIT} ${y * UNIT}h${UNIT}`;
-        if (x > 0 && state.maze.hasWall(x, y, 8)) d += `M${x * UNIT} ${y * UNIT}v${UNIT}`;
-      }
-    }
-    return d;
-  }
-
   function renderMaze(): void {
-    wallsPath.setAttribute('d', wallsD());
+    wallsPath.setAttribute('d', wallPathD(state.maze, UNIT));
     if (state.playing && state.progress > 0 && state.progress < state.steps.length) {
       const s = state.steps[state.progress - 1]!;
       headRect.setAttribute('x', String(s.x * UNIT));
@@ -190,8 +179,26 @@ export function mountApp(root: HTMLElement): void {
     return Math.round(t * t * 1800) + 8;
   }
 
+  function prefersReducedMotion(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  }
+
+  // 残りの手をすべて適用して完成形にする。動き抑制時の即時完成と、内部での早送りに使う。
+  function completeInstantly(): void {
+    while (state.progress < state.steps.length) {
+      state.maze.applyStep(state.steps[state.progress]!);
+      state.progress += 1;
+    }
+    renderMaze();
+    finish();
+  }
+
   function play(): void {
     if (state.progress >= state.steps.length) return;
+    if (prefersReducedMotion()) {
+      completeInstantly();
+      return;
+    }
     state.playing = true;
     lastTime = performance.now();
     acc = 0;
@@ -268,11 +275,22 @@ export function mountApp(root: HTMLElement): void {
     attrs: { 'aria-label': 'アルゴリズム' },
   }) as HTMLSelectElement;
   const algoDesc = h('p', { class: 'algo-desc' });
-  const sizeRange = h('input', {
+  const widthRange = h('input', {
     class: 'range',
-    attrs: { type: 'range', min: MIN_SIZE, max: MAX_SIZE, step: 1, 'aria-label': '大きさ' },
+    attrs: { type: 'range', min: MIN_SIZE, max: MAX_SIZE, step: 1, 'aria-label': '幅(横のマス数)' },
   }) as HTMLInputElement;
-  const sizeValue = h('span', { class: 'value' });
+  const widthValue = h('span', { class: 'value' });
+  const heightRange = h('input', {
+    class: 'range',
+    attrs: {
+      type: 'range',
+      min: MIN_SIZE,
+      max: MAX_SIZE,
+      step: 1,
+      'aria-label': '高さ(縦のマス数)',
+    },
+  }) as HTMLInputElement;
+  const heightValue = h('span', { class: 'value' });
   const speedRange = h('input', {
     class: 'range',
     attrs: { type: 'range', min: 1, max: 100, step: 1, 'aria-label': '速さ' },
@@ -287,6 +305,7 @@ export function mountApp(root: HTMLElement): void {
     attrs: { role: 'status', 'aria-live': 'polite' },
   });
   const statsList = h('dl', { class: 'stats' });
+  const statsMeter = h('div', { class: 'meter-wrap' });
 
   function buildControls(): HTMLElement {
     for (const gen of GENERATORS) {
@@ -300,15 +319,23 @@ export function mountApp(root: HTMLElement): void {
       regenerate();
     });
 
-    sizeRange.value = String(state.config.width);
-    sizeValue.textContent = `${state.config.width} × ${state.config.height}`;
-    sizeRange.addEventListener('input', () => {
-      const n = clampSize(Number(sizeRange.value));
-      sizeValue.textContent = `${n} × ${n}`;
+    widthRange.value = String(state.config.width);
+    widthValue.textContent = String(state.config.width);
+    widthRange.addEventListener('input', () => {
+      widthValue.textContent = String(clampSize(Number(widthRange.value)));
     });
-    sizeRange.addEventListener('change', () => {
-      const n = clampSize(Number(sizeRange.value));
-      state.config = { ...state.config, width: n, height: n };
+    widthRange.addEventListener('change', () => {
+      state.config = { ...state.config, width: clampSize(Number(widthRange.value)) };
+      regenerate();
+    });
+
+    heightRange.value = String(state.config.height);
+    heightValue.textContent = String(state.config.height);
+    heightRange.addEventListener('input', () => {
+      heightValue.textContent = String(clampSize(Number(heightRange.value)));
+    });
+    heightRange.addEventListener('change', () => {
+      state.config = { ...state.config, height: clampSize(Number(heightRange.value)) };
       regenerate();
     });
 
@@ -344,20 +371,59 @@ export function mountApp(root: HTMLElement): void {
       html: `${icon('link')}<span>リンクをコピー</span>`,
       on: { click: copyLink },
     });
+    const svgBtn = h('button', {
+      class: 'ghost',
+      attrs: { type: 'button' },
+      html: `${icon('download')}<span>SVG</span>`,
+      on: { click: () => downloadSvg() },
+    });
+    const pngBtn = h('button', {
+      class: 'ghost',
+      attrs: { type: 'button' },
+      html: `${icon('image')}<span>PNG</span>`,
+      on: { click: () => void downloadPng() },
+    });
 
     updateDesc();
 
     return h('section', { class: 'controls panel' }, [
       h('div', { class: 'control-grid' }, [
         labeled('アルゴリズム', algoSelect),
-        labeled('大きさ', withValue(sizeRange, sizeValue)),
+        h('div', { class: 'dims' }, [
+          labeled('幅', withValue(widthRange, widthValue)),
+          labeled('高さ', withValue(heightRange, heightValue)),
+        ]),
         labeled('速さ', speedRange),
       ]),
       algoDesc,
       h('div', { class: 'transport' }, [playBtn, stepBtn, restartBtn, newBtn, solutionToggle]),
-      h('div', { class: 'control-foot' }, [h('div', { class: 'share' }, [shareBtn, shareStatus])]),
-      h('div', { class: 'stats-block' }, [h('h2', { text: '指標' }), statsList]),
+      h('div', { class: 'control-foot' }, [
+        h('div', { class: 'share' }, [shareBtn, svgBtn, pngBtn]),
+        shareStatus,
+        keyHint(),
+      ]),
+      h('div', { class: 'stats-block' }, [h('h2', { text: '指標' }), statsList, statsMeter]),
     ]);
+  }
+
+  function keyHint(): HTMLElement {
+    const keys: Array<[string, string]> = [
+      ['Space', '再生'],
+      ['→', 'ステップ'],
+      ['R', '最初から'],
+      ['N', '別の迷路'],
+      ['S', '解答'],
+    ];
+    return h(
+      'dl',
+      { class: 'keyhint', attrs: { 'aria-label': 'キーボード操作' } },
+      keys.map(([k, label]) =>
+        h('div', { class: 'keyrow' }, [
+          h('dt', {}, [h('kbd', { text: k })]),
+          h('dd', { text: label }),
+        ]),
+      ),
+    );
   }
 
   function updateDesc(): void {
@@ -368,6 +434,7 @@ export function mountApp(root: HTMLElement): void {
     statsList.replaceChildren(
       h('p', { class: 'stats-empty', text: '生成が終わると指標が出ます。' }),
     );
+    statsMeter.replaceChildren();
   }
 
   function updateStats(): void {
@@ -382,6 +449,23 @@ export function mountApp(root: HTMLElement): void {
     statsList.replaceChildren(
       ...rows.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]),
     );
+    renderMeter(s.deadEndRatio);
+  }
+
+  function renderMeter(ratio: number): void {
+    const pct = Math.max(0, Math.min(1, ratio)) * 100;
+    const bar = svg('svg', {
+      class: 'meter',
+      viewBox: '0 0 100 4',
+      preserveAspectRatio: 'none',
+      role: 'img',
+      'aria-label': `行き止まり率 ${Math.round(pct)} パーセント`,
+    });
+    bar.append(
+      svg('rect', { class: 'meter-track', x: 0, y: 0, width: 100, height: 4, rx: 2 }),
+      svg('rect', { class: 'meter-fill', x: 0, y: 0, width: pct, height: 4, rx: 2 }),
+    );
+    statsMeter.replaceChildren(h('span', { class: 'meter-label', text: '行き止まりの密度' }), bar);
   }
 
   function syncControls(): void {
@@ -393,17 +477,79 @@ export function mountApp(root: HTMLElement): void {
     playBtn.disabled = done && !state.playing;
   }
 
+  let statusTimer = 0;
+  function flash(message: string): void {
+    shareStatus.textContent = message;
+    if (statusTimer) window.clearTimeout(statusTimer);
+    statusTimer = window.setTimeout(() => {
+      shareStatus.textContent = '';
+    }, 2600);
+  }
+
   async function copyLink(): Promise<void> {
     const url = `${location.origin}${location.pathname}#c=${encodeConfig(state.config)}`;
     try {
       await navigator.clipboard.writeText(url);
-      shareStatus.textContent = 'コピーしました';
+      flash('リンクをコピーしました');
     } catch {
       shareStatus.textContent = url;
     }
-    window.setTimeout(() => {
-      shareStatus.textContent = '';
-    }, 2600);
+  }
+
+  function currentTheme(): typeof LIGHT_THEME {
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? DARK_THEME : LIGHT_THEME;
+  }
+
+  function buildSvgString(): string {
+    const solutionPath = state.showSolution ? (state.solution ?? solve(state.maze))?.path : null;
+    return mazeToSvg(state.maze, { theme: currentTheme(), solution: solutionPath });
+  }
+
+  function triggerDownload(filename: string, blob: Blob): void {
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { attrs: { href: url, download: filename } });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function baseName(): string {
+    const c = state.config;
+    return exportFilename(c.algorithm, c.width, c.height, c.seed);
+  }
+
+  function downloadSvg(): void {
+    const blob = new Blob([buildSvgString()], { type: 'image/svg+xml' });
+    triggerDownload(`${baseName()}.svg`, blob);
+    flash('SVGを書き出しました');
+  }
+
+  async function downloadPng(): Promise<void> {
+    const svgString = buildSvgString();
+    const scale = 2;
+    try {
+      const img = new Image();
+      const svgUrl = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml' }));
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+        img.src = svgUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth * scale;
+      canvas.height = img.naturalHeight * scale;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas に描けません');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(svgUrl);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('PNGの生成に失敗しました');
+      triggerDownload(`${baseName()}.png`, blob);
+      flash('PNGを書き出しました');
+    } catch {
+      flash('PNGを書き出せませんでした');
+    }
   }
 
   function persist(): void {
@@ -441,11 +587,15 @@ export function mountApp(root: HTMLElement): void {
   const header = h('header', { class: 'site-header' }, [
     h('div', { class: 'brand' }, [
       h('span', { class: 'brand-mark', html: brandMark() }),
-      h('div', {}, [
+      h('div', { class: 'brand-text' }, [
+        h('span', { class: 'kicker', text: 'Maze generation, step by step' }),
         h('span', { class: 'brand-name', text: 'meiro' }),
-        h('span', { class: 'brand-tag', text: '迷路生成アルゴリズムの見比べ' }),
       ]),
     ]),
+    h('p', {
+      class: 'brand-lead',
+      text: '6つの迷路生成アルゴリズムを、壁を1枚ずつ掘っていく過程のアニメーションで並べて見比べる。',
+    }),
   ]);
 
   root.replaceChildren(
@@ -456,17 +606,62 @@ export function mountApp(root: HTMLElement): void {
     ]),
   );
 
+  function syncSizeControls(): void {
+    algoSelect.value = state.config.algorithm;
+    widthRange.value = String(state.config.width);
+    widthValue.textContent = String(state.config.width);
+    heightRange.value = String(state.config.height);
+    heightValue.textContent = String(state.config.height);
+  }
+
   regenerate();
 
   window.addEventListener('hashchange', () => {
     const shared = decodeConfig(location.hash);
     if (shared) {
       state.config = shared;
-      algoSelect.value = shared.algorithm;
-      sizeRange.value = String(shared.width);
-      sizeValue.textContent = `${shared.width} × ${shared.height}`;
+      syncSizeControls();
       updateDesc();
       regenerate();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.matches('input, select, textarea') || t.isContentEditable)) {
+      return;
+    }
+    switch (e.key) {
+      case ' ':
+      case 'Spacebar':
+        e.preventDefault();
+        if (state.playing) stop();
+        else play();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        stepOnce();
+        break;
+      case 'r':
+      case 'R':
+        restart();
+        break;
+      case 'n':
+      case 'N':
+        state.config = { ...state.config, seed: randomSeed() };
+        regenerate();
+        break;
+      case 's':
+      case 'S': {
+        const next = !state.showSolution;
+        solutionToggle.setAttribute('aria-pressed', String(next));
+        solutionToggle.classList.toggle('is-active', next);
+        toggleSolution(next);
+        break;
+      }
+      default:
+        return;
     }
   });
 }

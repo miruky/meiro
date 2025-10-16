@@ -11,6 +11,9 @@ const PATHS: Readonly<Record<string, string>> = {
     '<circle cx="6" cy="18" r="2.4" /><circle cx="18" cy="6" r="2.4" /><path d="M8 17c4 0 4-11 8-11" stroke-dasharray="2.4 2.6" />',
   link: '<path d="M9 14a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66L10.5 6.5" /><path d="M15 10a4 4 0 0 0-5.66 0L6.5 12.84a4 4 0 0 0 5.66 5.66L13.5 17.5" />',
   check: '<path d="M5 12.5 10 17 19 7" />',
+  download: '<path d="M12 4v9.5" /><path d="M8 10l4 4 4-4" /><path d="M5 19h14" />',
+  image:
+    '<rect x="4" y="5" width="16" height="14" rx="2.5" /><circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none" /><path d="M5 17l4.5-4.5 3 3L17 11l3 3" />',
 };
 
 export function icon(name: keyof typeof PATHS, size = 20): string {
