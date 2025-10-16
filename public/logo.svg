@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="meiro ロゴ">
+  <title>meiro</title>
+  <style>
+    .tile { fill: #fbfaf7; stroke: #e2ddd3; }
+    .wall { stroke: #c6c1b5; }
+    .route { stroke: #117e6f; }
+    .start { fill: #117e6f; }
+    .goal { fill: #c25733; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #1c1c17; stroke: #302f27; }
+      .wall { stroke: #3c3b31; }
+      .route { stroke: #36b6a3; }
+      .start { fill: #36b6a3; }
+      .goal { fill: #e0794f; }
+    }
+  </style>
+  <rect class="tile" x="3" y="3" width="90" height="90" rx="20" stroke-width="2" />
+  <g class="wall" fill="none" stroke-width="2" stroke-linecap="round">
+    <path d="M40 16v16M56 56v24M16 56h16M72 24v16" />
+  </g>
+  <path class="route" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"
+    d="M24 24h32v16H24v16h48v16" />
+  <circle class="start" cx="24" cy="24" r="4.4" />
+  <circle class="goal" cx="72" cy="72" r="4.4" />
+</svg>
