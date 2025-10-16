@@ -98,3 +98,21 @@ export function buildMaze(width: number, height: number, steps: readonly CarveSt
   for (const step of steps) maze.applyStep(step);
   return maze;
 }
+
+/**
+ * 迷路の壁を1本のSVGパスの d 文字列にする。外周をひと筆書きで囲み、内部は
+ * 北側・西側の壁だけを描く(隣接セルと共有するため二重に引かない)。画面表示と
+ * 書き出しの両方がこの同じ幾何を使う。
+ */
+export function wallPathD(maze: Maze, unit: number): string {
+  const w = maze.width;
+  const h = maze.height;
+  let d = `M0 0H${w * unit}V${h * unit}H0Z`;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (y > 0 && maze.hasWall(x, y, 1)) d += `M${x * unit} ${y * unit}h${unit}`;
+      if (x > 0 && maze.hasWall(x, y, 8)) d += `M${x * unit} ${y * unit}v${unit}`;
+    }
+  }
+  return d;
+}
