@@ -98,10 +98,19 @@ body {
 /* ---- ヘッダー ---- */
 
 .site-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 14px clamp(20px, 5vw, 56px);
+  padding-bottom: clamp(16px, 2.5vw, 24px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
 }
 
 .brand {
@@ -113,31 +122,43 @@ body {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border-radius: 13px;
   color: var(--accent);
   background: var(--surface);
   border: 1px solid var(--border);
 }
 
-.brand > div {
+.brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
+  gap: 3px;
+  line-height: 1.1;
+}
+
+.kicker {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .brand-name {
   font-family: var(--display);
-  font-size: 1.45rem;
+  font-size: clamp(1.7rem, 4vw, 2.1rem);
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--text-strong);
 }
 
-.brand-tag {
-  font-size: 0.82rem;
+.brand-lead {
+  font-size: clamp(0.86rem, 1.6vw, 0.96rem);
+  line-height: 1.7;
   color: var(--muted);
+  max-width: 42ch;
+  text-wrap: balance;
 }
 
 /* ---- レイアウト ---- */
@@ -252,6 +273,12 @@ body {
   gap: 18px;
 }
 
+.dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
 .labeled {
   display: flex;
   flex-direction: column;
@@ -330,7 +357,7 @@ body {
 }
 
 .value {
-  min-width: 74px;
+  min-width: 2.4em;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -440,16 +467,15 @@ button:disabled {
 .control-foot {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 2px;
+  gap: 14px;
+  padding-top: 16px;
   border-top: 1px solid var(--hairline);
 }
 
 .share {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-top: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -457,6 +483,47 @@ button:disabled {
   font-size: 0.85rem;
   color: var(--accent);
   font-weight: 600;
+  min-height: 1.2em;
+}
+
+.share-status:empty {
+  display: none;
+}
+
+/* ---- キーボード操作の凡例 ---- */
+
+.keyhint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.keyrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.keyhint dt,
+.keyhint dd {
+  margin: 0;
+}
+
+kbd {
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-strong);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  min-width: 1.4em;
+  text-align: center;
 }
 
 /* ---- 指標 ---- */
@@ -503,6 +570,41 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.meter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 16px;
+}
+
+.meter-wrap:empty {
+  display: none;
+}
+
+.meter-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.meter {
+  width: 100%;
+  height: 5px;
+  display: block;
+  overflow: visible;
+}
+
+.meter-track {
+  fill: var(--surface-sunken);
+  stroke: var(--border);
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.meter-fill {
+  fill: var(--accent);
+}
+
 /* ---- フォーカスとアクセシビリティ ---- */
 
 :focus-visible {
@@ -535,6 +637,18 @@ button:disabled {
 
   .stats dd {
     animation: fade 0.4s var(--ease) both;
+  }
+
+  .meter-fill {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: grow 0.65s var(--ease) both;
+  }
+
+  @keyframes grow {
+    from {
+      transform: scaleX(0);
+    }
   }
 
   .head {
